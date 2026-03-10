@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+.DS_Store
+temp/
+uploads/
+*.mp4
+*.wav
+*.mp3
+data/
+*.sqlite
+*.sqlite3
