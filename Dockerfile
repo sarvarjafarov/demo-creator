@@ -1,7 +1,17 @@
 FROM node:20-slim
 
-# Install FFmpeg
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+# Install FFmpeg with drawtext support, fonts, and Puppeteer/Chromium dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    fonts-dejavu-core \
+    fonts-liberation \
+    chromium \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Tell Puppeteer to use system Chromium instead of downloading its own
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
 
@@ -17,6 +27,9 @@ RUN cd client && npm run build
 
 # Copy server source
 COPY server/ ./server/
+
+# Create temp and uploads directories
+RUN mkdir -p server/temp uploads
 
 # Set environment
 ENV NODE_ENV=production
