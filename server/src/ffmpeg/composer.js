@@ -62,9 +62,9 @@ async function createTextCard(text, subtitle, options = {}) {
   const g2 = isCtaCard ? 40 : 12;
   const b2 = isCtaCard ? 110 : 24;
 
-  // Animated gradient background using geq with slow vertical shift
+  // Gradient background using geq (static vertical gradient — compatible with all FFmpeg versions)
   const bgFilter = `color=c=black:s=${width}x${height}:d=${duration}:r=30,` +
-    `geq=r='${r2}+(${r1}-${r2})*(H-Y+15*t)/H':g='${g2}+(${g1}-${g2})*(H-Y+15*t)/H':b='${b2}+(${b1}-${b2})*(H-Y+15*t)/H'`;
+    `geq=r='${r2}+(${r1}-${r2})*(H-Y)/H':g='${g2}+(${g1}-${g2})*(H-Y)/H':b='${b2}+(${b1}-${b2})*(H-Y)/H'`;
 
   // Build filter parts
   const filters = [bgFilter];

@@ -86,6 +86,13 @@ export async function captureFromUrl(req, res, next) {
       return res.status(400).json({ error: { message: 'Project has no product URL configured' } });
     }
 
+    // If screenshots already exist for this project, return them instead of re-capturing
+    const existing = assetModel.findByProject(project.id, 'screenshot');
+    if (existing.length > 0) {
+      logger.info(`Capture: returning ${existing.length} existing screenshots for project ${project.id}`);
+      return res.status(200).json({ message: `Found ${existing.length} existing screenshots`, screenshots: existing });
+    }
+
     logger.info(`Starting auto-capture for project ${project.id} from ${project.productUrl}`);
     const { screenshots } = await captureService.captureScreenshots(project.id, project.productUrl);
 
