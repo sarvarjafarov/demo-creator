@@ -69,33 +69,30 @@ async function createTextCard(text, subtitle, options = {}) {
   // Build filter parts
   const filters = [bgFilter];
 
-  // Decorative soft accent shapes (semi-transparent boxes)
-  filters.push(`drawbox=x=${width - 400}:y=100:w=300:h=300:color=white@0.03:t=fill`);
-  filters.push(`drawbox=x=80:y=${height - 350}:w=250:h=250:color=white@0.02:t=fill`);
-
-  // Headline: slides up 25px while fading in over 0.6s
+  // Headline: centered with simple fade-in
+  const titleY = Math.round(height / 2 - 50);
   filters.push(
     `drawtext=text='${safeText}':fontsize=68:fontcolor=white:` +
-    `x=(w-text_w)/2:` +
-    `y='(h/2-text_h-15+25*min(1\\,t/0.6))':` +
+    `x=(w-text_w)/2:y=${titleY}:` +
     `alpha='min(1\\,t/0.6)'`
   );
 
-  // Subtitle: delayed fade-in with slide up
+  // Subtitle: below headline with delayed fade-in
   if (safeSubtitle) {
+    const subY = Math.round(height / 2 + 30);
     filters.push(
       `drawtext=text='${safeSubtitle}':fontsize=28:fontcolor=white@0.75:` +
-      `x=(w-text_w)/2:` +
-      `y='(h/2+35+15*min(1\\,max(0\\,(t-0.3))/0.5))':` +
+      `x=(w-text_w)/2:y=${subY}:` +
       `alpha='if(gt(t\\,0.3)\\,min(1\\,(t-0.3)/0.5)\\,0)'`
     );
   }
 
-  // Animated accent line that grows from center
+  // Static accent line centered below text
+  const lineY = Math.round(height / 2 + (safeSubtitle ? 80 : 40));
+  const lineX = Math.round(width / 2 - 150);
+  const lineColor = isCtaCard ? 'white' : '#4f7df5';
   filters.push(
-    `drawbox=x='w/2-150*min(1\\,t/0.8)':y='h/2+${safeSubtitle ? 80 : 40}':` +
-    `w='300*min(1\\,t/0.8)':h=3:` +
-    `color=${isCtaCard ? 'white' : '#4f7df5'}@0.7:t=fill`
+    `drawbox=x=${lineX}:y=${lineY}:w=300:h=3:color=${lineColor}@0.7:t=fill`
   );
 
   // Fade out at end
@@ -150,11 +147,12 @@ async function createScreenshotClip(screenshotBuffer, effect, duration, options 
 
   if (headline) {
     const safeHeadline = escapeText(headline);
+    const barY = height - 90;
     filterParts.push(
       `[${lastLabel}]` +
-      `drawbox=x=0:y=h-90:w=w:h=90:color=black@0.5:t=fill,` +
+      `drawbox=x=0:y=${barY}:w=${width}:h=90:color=black@0.5:t=fill,` +
       `drawtext=text='${safeHeadline}':fontsize=30:fontcolor=white:` +
-      `x=60:y=h-62` +
+      `x=60:y=${barY + 28}` +
       `[textout]`
     );
     lastLabel = 'textout';
