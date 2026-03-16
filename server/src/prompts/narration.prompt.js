@@ -1,33 +1,45 @@
 /**
  * Narration Generator
- * Produces voiceover-ready narration text with pacing awareness.
+ * Converts demo script into polished voiceover-ready text with natural pacing.
  */
 export function buildNarrationPrompt(project, script, storyboard) {
-  const system = `You are a professional voiceover script writer.
-Write narration that sounds natural when spoken aloud. Use conversational pacing.
-Include brief pauses (marked with "...") where the speaker should breathe.
-Average speaking rate is ~150 words per minute. Time your narration accordingly.
-Output structured JSON.`;
+  const system = `You are a professional voiceover director who writes narration for product demo videos.
 
-  const user = `Write voiceover narration for this product demo:
+Your narration must:
+- Sound NATURAL when spoken aloud — like a real person talking, not a press release
+- Use conversational pacing with strategic pauses (marked with "...")
+- Match the energy to the content: enthusiastic for benefits, calm for explanations
+- Stay within ~150 words per minute speaking rate
+- NEVER use filler phrases like "In today's world", "Let's face it", "But wait", "Imagine"
+- Every sentence must carry specific product information — no empty sentences`;
 
-PRODUCT: ${project.productName}
-VIDEO LENGTH: ${project.preferredVideoLength || '60 sec'}
-TONE: ${project.toneOfVoice || 'Professional and friendly'}
+  const user = `Write the final voiceover narration for this product demo video.
 
-SCRIPT:
+═══ PRODUCT ═══
+Name: ${project.productName}
+Tone: ${project.toneOfVoice || 'Professional and friendly'}
+Target Video Length: ${project.preferredVideoLength || '60 sec'}
+
+═══ SCRIPT ═══
 ${typeof script === 'string' ? script : JSON.stringify(script, null, 2)}
 
-STORYBOARD:
+═══ STORYBOARD ═══
 ${typeof storyboard === 'string' ? storyboard : JSON.stringify(storyboard, null, 2)}
 
-Return JSON with this exact structure:
+═══ INSTRUCTIONS ═══
+- Write the narration to be spoken EXACTLY as written — it goes directly to TTS
+- Each segment must match its scene's duration at ~2.5 words per second
+- Use "..." for pauses between key ideas (these help TTS sound natural)
+- Start strong — the first 5 seconds determine if someone keeps watching
+- End with a clear, memorable call to action
+
+Return JSON:
 {
-  "fullNarration": "Complete narration text for the entire video, ready for TTS",
+  "fullNarration": "The complete narration for the entire video, exactly as it should be spoken. Use ... for pauses.",
   "segments": [
     {
       "sceneNumber": 1,
-      "narrationText": "The spoken words for this scene",
+      "narrationText": "Exact spoken words for this scene",
       "estimatedDurationSeconds": 5,
       "wordCount": 12,
       "paceNote": "normal | slow | energetic"

@@ -1,24 +1,35 @@
 /**
  * Product Brief Generator
- * Transforms raw user inputs into a polished creative brief for demo video production.
- * Supports multimodal input: when screenshots are provided, Nova analyzes them visually.
+ * Deep product analysis → compelling creative brief.
+ * When screenshots are available, Nova analyzes them visually (multimodal).
  */
 export function buildProductBriefPrompt(project, { hasScreenshots = false } = {}) {
-  const system = `You are a product marketing expert creating creative briefs for product demo videos.
-Output a structured JSON creative brief. Be concise and action-oriented.
-Focus on what makes this product compelling for the target audience.
-${hasScreenshots ? 'You are provided with actual screenshots of the product. Analyze them carefully to understand the UI, design quality, features visible, and user experience. Use these visual insights to craft a more accurate and compelling brief.' : ''}`;
+  const system = `You are a world-class product marketing strategist who creates creative briefs for demo videos.
 
-  let user = `Create a creative brief for a product demo video based on these inputs:
+Your process:
+1. DEEPLY ANALYZE the product description — extract every feature, benefit, and use case mentioned
+2. IDENTIFY the core value proposition — what problem does this solve and why should anyone care?
+3. MAP the user journey — from first impression to "aha moment" to conversion
+4. CRAFT messaging that speaks directly to the target audience's pain points
+${hasScreenshots ? `5. ANALYZE the attached screenshots — study the UI, identify key screens, note the visual hierarchy, color scheme, and what features are visible. Use these visual insights to make the brief concrete and specific.` : ''}
 
+You must be SPECIFIC — never use generic marketing language. Every message should be grounded in the actual product details provided.`;
+
+  let user = `Analyze this product deeply and create a creative brief for a 60-second demo video.
+
+═══ PRODUCT DETAILS ═══
 Product Name: ${project.productName}
 Category: ${project.productCategory || 'Not specified'}
-Description: ${project.shortDescription}
 Target Audience: ${project.targetAudience || 'General audience'}
 Product URL: ${project.productUrl || 'Not provided'}
+Call to Action: ${project.callToAction || 'Try it free today'}
 Demo Style: ${project.preferredDemoStyle || 'clean SaaS demo'}
 Video Length: ${project.preferredVideoLength || '60 sec'}
-Call to Action: ${project.callToAction || 'Try it free today'}
+
+═══ FULL PRODUCT DESCRIPTION (READ CAREFULLY) ═══
+${project.shortDescription}
+
+═══ ADDITIONAL CONTEXT ═══
 Brand Colors: ${project.brandColors || 'Not specified'}
 Tone of Voice: ${project.toneOfVoice || 'Professional and friendly'}
 Key Features: ${project.keyFeatures || 'Not specified'}
@@ -28,31 +39,46 @@ Desired Outcome: ${project.desiredOutcome || 'Increase awareness and signups'}`;
   if (hasScreenshots) {
     user += `
 
-IMPORTANT: I have attached screenshots of the actual product above. Please analyze them to:
-1. Identify the visual design style, color palette, and UI patterns
-2. Spot key features visible in the interface
-3. Understand the user workflow and navigation
-4. Note any standout design elements worth highlighting in the demo video
-Use these observations to make the brief more specific and visually-informed.`;
+═══ VISUAL ANALYSIS (SCREENSHOTS ATTACHED ABOVE) ═══
+Study the attached screenshots carefully. For each screenshot, note:
+- What screen/page is this? (dashboard, pricing, landing, settings, etc.)
+- What key features or data are visible?
+- What is the visual design quality and style?
+- What would a first-time user notice most?`;
   }
 
   user += `
 
-Return JSON with this exact structure:
+═══ INSTRUCTIONS ═══
+Think step by step:
+1. What is the SINGLE most compelling thing about this product?
+2. What SPECIFIC pain point does it solve for the target audience?
+3. What makes it DIFFERENT from alternatives?
+4. What is the "aha moment" — the point where a viewer says "I need this"?
+
+Return JSON:
 {
-  "productSummary": "One-paragraph summary of the product and its value",
-  "targetPersona": "Who this demo is for, their pain points",
-  "keyMessages": ["message1", "message2", "message3"],
-  "uniqueSellingPoints": ["usp1", "usp2", "usp3"],
-  "toneGuidelines": "How the demo should feel",
-  "videoObjective": "What this video should achieve",
-  "estimatedSceneCount": 5,
-  "suggestedHook": "Opening hook to grab attention in first 3 seconds"${hasScreenshots ? `,
+  "productAnalysis": {
+    "coreProblem": "The specific problem this product solves",
+    "coreValue": "The one-sentence value proposition",
+    "keyFeatures": ["feature1 with specific detail", "feature2 with specific detail", "feature3"],
+    "targetPainPoints": ["specific pain point 1", "specific pain point 2"],
+    "ahaMonent": "The moment in the demo that makes viewers want to try it",
+    "competitiveEdge": "What makes this different/better"
+  },
+  "productSummary": "One compelling paragraph that sells this product (use actual features and numbers from the description)",
+  "targetPersona": "Specific description of the ideal viewer — their role, daily frustrations, and what they're looking for",
+  "keyMessages": ["message1 grounded in product details", "message2", "message3"],
+  "uniqueSellingPoints": ["specific USP from the description", "specific USP", "specific USP"],
+  "toneGuidelines": "How the demo should feel — specific guidance",
+  "videoObjective": "What this video should achieve and what action the viewer should take",
+  "estimatedSceneCount": 6,
+  "suggestedHook": "A specific, punchy opening line that names the problem (not generic)"${hasScreenshots ? `,
   "visualInsights": {
     "dominantColors": ["color1", "color2"],
-    "designStyle": "Description of the UI design style",
-    "keyFeaturesObserved": ["feature1", "feature2"],
-    "highlightableElements": ["element worth showcasing in demo"]
+    "designStyle": "Specific description of the UI design style observed",
+    "keyScreensIdentified": ["screen1 and what it shows", "screen2 and what it shows"],
+    "highlightableElements": ["specific UI element worth showcasing"]
   }` : ''}
 }`;
 
