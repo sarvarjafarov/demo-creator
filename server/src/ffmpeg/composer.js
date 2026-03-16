@@ -107,6 +107,7 @@ async function createTextCard(text, subtitle, options = {}) {
     '-i', filters[0], // background source
     '-vf', filters.slice(1).join(','),
     '-c:v', 'libx264',
+    '-preset', 'fast',
     '-t', String(duration),
     '-pix_fmt', 'yuv420p',
     '-r', '30',
@@ -118,9 +119,8 @@ async function createTextCard(text, subtitle, options = {}) {
 
 // ─── Screenshot Clip ─────────────────────────────────────────────────
 /**
- * Creates a screenshot clip with:
- * - Dark gradient background (screenshot floats on it)
- * - Drop shadow effect
+ * Creates a screenshot clip in a SINGLE FFmpeg call:
+ * - Dark solid background (screenshot floats on it)
  * - Motion effect (zoom, pan, ken burns, etc.)
  * - Optional text overlay (lower-third style)
  */
@@ -128,76 +128,33 @@ async function createScreenshotClip(screenshotBuffer, effect, duration, options 
   const { width = 1920, height = 1080, headline } = options;
 
   const imgPath = join(TEMP_DIR, `img-${uuid()}.png`);
-  const bgPath = join(TEMP_DIR, `bg-${uuid()}.mp4`);
   const outputPath = join(TEMP_DIR, `clip-${uuid()}.mp4`);
 
   writeFileSync(imgPath, screenshotBuffer);
 
-  // Step 1: Create dark gradient background video
-  await runFFmpeg([
-    '-y',
-    '-f', 'lavfi',
-    '-i', `color=c=black:s=${width}x${height}:d=${duration}:r=30,` +
-      `geq=r='8+4*Y/H':g='10+5*Y/H':b='16+10*Y/H'`,
-    '-c:v', 'libx264',
-    '-t', String(duration),
-    '-pix_fmt', 'yuv420p',
-    '-r', '30',
-    bgPath,
-  ]);
-
-  // Step 2: Create the screenshot clip with motion effect at 85% size
   const ssWidth = Math.round(width * 0.88);
   const ssHeight = Math.round(height * 0.85);
   const effectType = effect?.type || 'zoom_in';
   const motionFilter = getEffectFilter(effectType, duration, ssWidth, ssHeight);
-
-  const ssClipPath = join(TEMP_DIR, `ss-${uuid()}.mp4`);
-  await runFFmpeg([
-    '-y',
-    '-loop', '1',
-    '-i', imgPath,
-    '-vf', motionFilter,
-    '-c:v', 'libx264',
-    '-t', String(duration),
-    '-pix_fmt', 'yuv420p',
-    '-r', '30',
-    ssClipPath,
-  ]);
-
-  // Step 3: Create shadow layer (blurred, dark copy offset by 6px)
-  const shadowPath = join(TEMP_DIR, `shadow-${uuid()}.mp4`);
-  await runFFmpeg([
-    '-y',
-    '-i', ssClipPath,
-    '-vf', `boxblur=12:12,colorchannelmixer=aa=0.35`,
-    '-c:v', 'libx264',
-    '-pix_fmt', 'yuv420p',
-    shadowPath,
-  ]);
-
-  // Step 4: Composite: bg + shadow (offset) + screenshot + optional text overlay
   const ox = Math.round((width - ssWidth) / 2);
   const oy = Math.round((height - ssHeight) / 2);
 
-  let filterComplex = [
-    `[1:v]setpts=PTS-STARTPTS[shadow]`,
-    `[2:v]setpts=PTS-STARTPTS[ss]`,
-    `[0:v][shadow]overlay=${ox + 6}:${oy + 6}[with_shadow]`,
-    `[with_shadow][ss]overlay=${ox}:${oy}[composed]`,
+  // Single filter_complex: dark background + motion screenshot overlay + optional text
+  let filterParts = [
+    `color=c=#0a0e1a:s=${width}x${height}:d=${duration}:r=30[bg]`,
+    `[0:v]${motionFilter}[ss]`,
+    `[bg][ss]overlay=${ox}:${oy}[composed]`,
   ];
 
   let lastLabel = 'composed';
 
-  // Add text overlay if headline provided
   if (headline) {
     const safeHeadline = escapeText(headline);
-    filterComplex.push(
+    filterParts.push(
       `[${lastLabel}]` +
-      `drawbox=x=0:y=h-100:w=w:h=100:color=black@0.5:t=fill,` +
-      `drawtext=text='${safeHeadline}':fontsize=32:fontcolor=white:` +
-      `x=60:y=h-72:` +
-      `alpha='if(between(t\\,0.5\\,${duration - 0.5})\\,min(1\\,(t-0.5)/0.4)\\,max(0\\,1-(t-${duration - 0.5})/0.4))'` +
+      `drawbox=x=0:y=h-90:w=w:h=90:color=black@0.5:t=fill,` +
+      `drawtext=text='${safeHeadline}':fontsize=30:fontcolor=white:` +
+      `x=60:y=h-62` +
       `[textout]`
     );
     lastLabel = 'textout';
@@ -205,23 +162,19 @@ async function createScreenshotClip(screenshotBuffer, effect, duration, options 
 
   await runFFmpeg([
     '-y',
-    '-i', bgPath,
-    '-i', shadowPath,
-    '-i', ssClipPath,
-    '-filter_complex', filterComplex.join(';'),
+    '-loop', '1',
+    '-i', imgPath,
+    '-filter_complex', filterParts.join(';'),
     '-map', `[${lastLabel}]`,
     '-c:v', 'libx264',
+    '-preset', 'fast',
     '-pix_fmt', 'yuv420p',
     '-r', '30',
     '-t', String(duration),
     outputPath,
   ]);
 
-  // Cleanup intermediate files
-  for (const p of [imgPath, bgPath, ssClipPath, shadowPath]) {
-    try { unlinkSync(p); } catch {}
-  }
-
+  try { unlinkSync(imgPath); } catch {}
   return outputPath;
 }
 
@@ -311,6 +264,7 @@ async function composeVideo({ project, sceneJson, subtitles, screenshots, voiceo
       '-filter_complex', filterComplex,
       '-map', outputLabel,
       '-c:v', 'libx264',
+      '-preset', 'fast',
       '-pix_fmt', 'yuv420p',
       '-r', '30',
       mergedPath,
@@ -385,6 +339,7 @@ async function composeVideo({ project, sceneJson, subtitles, screenshots, voiceo
       '-i', finalPath,
       '-vf', `subtitles=${srtPath}:force_style='FontSize=28,PrimaryColour=&H00FFFFFF,OutlineColour=&H80000000,BackColour=&H40000000,Outline=2,Shadow=0,BorderStyle=4,MarginV=50,Alignment=2'`,
       '-c:v', 'libx264',
+      '-preset', 'fast',
       '-c:a', 'copy',
       '-pix_fmt', 'yuv420p',
       withSubsPath,
