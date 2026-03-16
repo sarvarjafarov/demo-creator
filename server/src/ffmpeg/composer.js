@@ -136,11 +136,12 @@ async function createScreenshotClip(screenshotBuffer, effect, duration, options 
   const ox = Math.round((width - ssWidth) / 2);
   const oy = Math.round((height - ssHeight) / 2);
 
-  // Pre-scale handles Retina/oversized inputs (e.g. 2880x1800 -> ssWidth x ssHeight)
-  // Then motion effect is applied on correctly-sized input, avoiding pad dimension errors
+  // Pre-scale to exact target dimensions. Hard scale (no force_original_aspect_ratio)
+  // guarantees exact output size — no rounding errors that break downstream pad filters.
+  // The slight aspect ratio adjustment (e.g. 1.6:1 → 1.84:1) is negligible for screenshots.
   let filterParts = [
     `color=c=#0a0e1a:s=${width}x${height}:d=${duration}:r=30[bg]`,
-    `[0:v]scale=${ssWidth}:${ssHeight}:force_original_aspect_ratio=decrease,pad=${ssWidth}:${ssHeight}:(ow-iw)/2:(oh-ih)/2:black,setsar=1[prescaled]`,
+    `[0:v]scale=${ssWidth}:${ssHeight},setsar=1[prescaled]`,
     `[prescaled]${motionFilter}[ss]`,
     `[bg][ss]overlay=${ox}:${oy}[composed]`,
   ];

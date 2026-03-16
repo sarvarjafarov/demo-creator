@@ -2,27 +2,19 @@
  * FFmpeg filter expressions for scene effects.
  * Each function returns a filter string for use in FFmpeg -vf.
  *
- * All effects first scale the image to fit the target frame (preserving aspect ratio
- * with black padding), then apply motion. This prevents stretching/distortion.
+ * IMPORTANT: Effects assume the input is already correctly sized by the
+ * pre-scale step in composer.js. They use hard scale (no force_original_aspect_ratio)
+ * to guarantee exact output dimensions and avoid pad rounding errors.
  */
-
-/**
- * Base scale filter that preserves aspect ratio and pads to target size.
- */
-function fitScale(width, height) {
-  return `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
-}
 
 /**
  * Zoom-in effect: slowly zooms from 100% to ~108% over the duration.
- * Uses zoompan on a slightly upscaled image for smooth motion.
  */
 export function zoomIn(duration, width = 1920, height = 1080) {
   const frames = duration * 30;
-  // Scale up slightly so zoompan has room to zoom
   const sw = Math.round(width * 1.15);
   const sh = Math.round(height * 1.15);
-  return `scale=${sw}:${sh}:force_original_aspect_ratio=decrease,pad=${sw}:${sh}:(ow-iw)/2:(oh-ih)/2:black,` +
+  return `scale=${sw}:${sh},` +
     `zoompan=z='min(zoom+0.0008,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${width}x${height}:fps=30`;
 }
 
@@ -33,7 +25,7 @@ export function zoomOut(duration, width = 1920, height = 1080) {
   const frames = duration * 30;
   const sw = Math.round(width * 1.15);
   const sh = Math.round(height * 1.15);
-  return `scale=${sw}:${sh}:force_original_aspect_ratio=decrease,pad=${sw}:${sh}:(ow-iw)/2:(oh-ih)/2:black,` +
+  return `scale=${sw}:${sh},` +
     `zoompan=z='if(eq(on,1),1.08,max(zoom-0.0008,1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${width}x${height}:fps=30`;
 }
 
@@ -43,7 +35,8 @@ export function zoomOut(duration, width = 1920, height = 1080) {
 export function panLeft(duration, width = 1920, height = 1080) {
   const frames = duration * 30;
   const sw = Math.round(width * 1.15);
-  return `scale=${sw}:${height}:force_original_aspect_ratio=decrease,pad=${sw}:${height}:(ow-iw)/2:(oh-ih)/2:black,` +
+  const sh = Math.round(height * 1.15);
+  return `scale=${sw}:${sh},` +
     `zoompan=z='1':x='(iw-ow)*on/${frames}':y='(ih-oh)/2':d=${frames}:s=${width}x${height}:fps=30`;
 }
 
@@ -53,7 +46,8 @@ export function panLeft(duration, width = 1920, height = 1080) {
 export function panRight(duration, width = 1920, height = 1080) {
   const frames = duration * 30;
   const sw = Math.round(width * 1.15);
-  return `scale=${sw}:${height}:force_original_aspect_ratio=decrease,pad=${sw}:${height}:(ow-iw)/2:(oh-ih)/2:black,` +
+  const sh = Math.round(height * 1.15);
+  return `scale=${sw}:${sh},` +
     `zoompan=z='1':x='(iw-ow)*(1-on/${frames})':y='(ih-oh)/2':d=${frames}:s=${width}x${height}:fps=30`;
 }
 
@@ -61,26 +55,25 @@ export function panRight(duration, width = 1920, height = 1080) {
  * Fade in and out with static display.
  */
 export function fadeInOut(duration, width = 1920, height = 1080) {
-  return `${fitScale(width, height)},` +
+  return `scale=${width}:${height},` +
     `fade=t=in:st=0:d=0.5,fade=t=out:st=${Math.max(0, duration - 0.5)}:d=0.5`;
 }
 
 /**
- * Static display - scale and pad to fit, no motion.
+ * Static display - scale to fit, no motion.
  */
 export function staticDisplay(duration, width = 1920, height = 1080) {
-  return fitScale(width, height);
+  return `scale=${width}:${height}`;
 }
 
 /**
  * Ken Burns effect: combined slow zoom + diagonal pan.
- * The signature documentary/cinema effect.
  */
 export function kenBurns(duration, width = 1920, height = 1080) {
   const frames = duration * 30;
   const sw = Math.round(width * 1.2);
   const sh = Math.round(height * 1.2);
-  return `scale=${sw}:${sh}:force_original_aspect_ratio=decrease,pad=${sw}:${sh}:(ow-iw)/2:(oh-ih)/2:black,` +
+  return `scale=${sw}:${sh},` +
     `zoompan=z='min(zoom+0.0006,1.08)':x='(iw-iw/zoom)/2+on*0.15':y='(ih-ih/zoom)/2+on*0.1':d=${frames}:s=${width}x${height}:fps=30`;
 }
 
@@ -91,7 +84,7 @@ export function float(duration, width = 1920, height = 1080) {
   const frames = duration * 30;
   const sw = Math.round(width * 1.08);
   const sh = Math.round(height * 1.08);
-  return `scale=${sw}:${sh}:force_original_aspect_ratio=decrease,pad=${sw}:${sh}:(ow-iw)/2:(oh-ih)/2:black,` +
+  return `scale=${sw}:${sh},` +
     `zoompan=z='1.03':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2+6*sin(on/${frames}*6.28)':d=${frames}:s=${width}x${height}:fps=30`;
 }
 
