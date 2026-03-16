@@ -2,9 +2,11 @@ import jobModel from '../../models/job.model.js';
 import projectModel from '../../models/project.model.js';
 import contentModel from '../../models/content.model.js';
 import assetModel from '../../models/asset.model.js';
+import storageProvider from '../../providers/storage.provider.js';
 import elevenLabsService from '../../services/elevenlabs.service.js';
+import logger from '../../utils/logger.js';
 
-/** Handle voiceover generation job */
+/** Handle voiceover generation job — clones user's voice then generates TTS */
 export default async function voiceHandler(job) {
   jobModel.start(job.id);
   jobModel.appendLog(job.id, 'Starting voiceover generation');
@@ -21,11 +23,33 @@ export default async function voiceHandler(job) {
 
     if (!narrationText) throw new Error('No narration text available');
 
-    // Generate voiceover via ElevenLabs
+    // Check if user uploaded a voice sample — clone it for personalized TTS
+    const voiceAssets = assetModel.findByProject(job.projectId, 'voice');
+    let voiceId = undefined;
+
+    if (voiceAssets.length > 0) {
+      try {
+        jobModel.appendLog(job.id, 'Cloning user voice from uploaded sample');
+        const { buffer } = await storageProvider.download(voiceAssets[0].s3Key);
+        const cloneResult = await elevenLabsService.addVoiceClone(
+          `demo-${project.productName || job.projectId}`.slice(0, 40),
+          buffer
+        );
+        voiceId = cloneResult.voiceId;
+        jobModel.appendLog(job.id, `Voice cloned successfully (ID: ${voiceId})`);
+        logger.info(`Voice cloned for project ${job.projectId}: ${voiceId}`);
+      } catch (cloneErr) {
+        logger.warn(`Voice clone failed, using default voice: ${cloneErr.message}`);
+        jobModel.appendLog(job.id, `Voice clone failed (${cloneErr.message}), using default voice`);
+      }
+    }
+
+    // Generate voiceover via ElevenLabs (with cloned voice or default)
     jobModel.appendLog(job.id, 'Calling ElevenLabs TTS');
     const { s3Key, url } = await elevenLabsService.generateVoiceover(
       job.projectId,
-      narrationText
+      narrationText,
+      voiceId ? { voiceId } : {}
     );
 
     // Save voiceover asset
