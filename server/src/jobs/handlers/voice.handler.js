@@ -42,8 +42,9 @@ export default async function voiceHandler(job) {
     jobModel.complete(job.id, { s3Key, url });
     jobModel.appendLog(job.id, 'Voiceover generation completed');
   } catch (err) {
+    // Voiceover is optional — don't block the pipeline on failure
     jobModel.fail(job.id, err.message);
-    projectModel.updateStatus(job.projectId, 'error');
-    throw err;
+    jobModel.appendLog(job.id, `Voiceover skipped: ${err.message}`);
+    // Do NOT set project status to 'error' — video can render without voiceover
   }
 }

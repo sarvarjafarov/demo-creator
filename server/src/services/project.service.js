@@ -40,6 +40,12 @@ const projectService = {
     const content = contentModel.findByProject(id);
     const assets = assetModel.findByProject(id);
 
+    // Use only the LATEST job per type to avoid stale data from retries
+    const latestByType = {};
+    for (const j of jobs) {
+      latestByType[j.type] = j; // last wins (ordered by rowid)
+    }
+
     const steps = {
       project_created: true,
       assets_uploaded: assets.length > 0,
@@ -50,18 +56,15 @@ const projectService = {
       narration_generated: !!content?.narration,
       subtitles_generated: !!content?.subtitles,
       scene_json_generated: !!content?.sceneJson,
-      video_rendered: jobs.some((j) => j.type === 'video_render' && j.status === 'completed'),
+      video_rendered: latestByType['video_render']?.status === 'completed',
     };
 
     const activeJob = jobs.find((j) => j.status === 'running');
 
-    // Only report error from the latest job per type
-    // so old failed jobs don't block retries
-    const latestByType = {};
-    for (const j of jobs) {
-      latestByType[j.type] = j; // last wins (ordered by rowid)
-    }
-    const latestFailed = Object.values(latestByType).find((j) => j.status === 'failed');
+    // Voice generation failures are non-blocking (voiceover is optional)
+    const latestFailed = Object.values(latestByType).find(
+      (j) => j.status === 'failed' && j.type !== 'voice_generation'
+    );
 
     return {
       projectId: id,

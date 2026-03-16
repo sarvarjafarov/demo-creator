@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import StepIndicator from '../components/StepIndicator';
@@ -18,12 +18,15 @@ export default function UploadPage() {
   const [captureResult, setCaptureResult] = useState(null);
   const [manualFiles, setManualFiles] = useState([]);
   const [showManualUpload, setShowManualUpload] = useState(false);
+  const captureStarted = useRef(false);
 
   const onVoiceRecorded = useCallback((file) => setVoiceFile(file), []);
   const onManualFiles = useCallback((files) => setManualFiles((prev) => [...prev, ...files]), []);
   function removeManualFile(index) { setManualFiles((prev) => prev.filter((_, i) => i !== index)); }
 
   useEffect(() => {
+    if (captureStarted.current) return;
+    captureStarted.current = true;
     let cancelled = false;
     async function runCapture() {
       setCaptureStatus('capturing');

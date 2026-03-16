@@ -4,6 +4,8 @@ import { resolve, dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuid } from 'uuid';
 import { getEffectFilter } from './effects.js';
+import { buildTransitionChain, pickTransition } from './transitions.js';
+import { generateBackgroundMusic } from './audio.js';
 import logger from '../utils/logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -30,84 +32,80 @@ function runFFmpeg(args) {
   });
 }
 
+// ─── Escape text for FFmpeg drawtext ──────────────────────────────────
+function escapeText(text) {
+  return (text || '').replace(/[\\':]/g, '\\$&');
+}
+
+// ─── Title Card ──────────────────────────────────────────────────────
 /**
- * Create a title card or CTA card video using FFmpeg.
- * Generates a gradient background with centered text and fade in/out.
+ * Creates a professional title card with animated gradient background,
+ * text fade-in animation, and decorative accent line.
  */
 async function createTextCard(text, subtitle, options = {}) {
   const {
     width = 1920,
     height = 1080,
-    bgColor = '0x1e3a8a',
-    textColor = 'white',
     duration = 5,
+    isCtaCard = false,
   } = options;
 
   const outputPath = join(TEMP_DIR, `card-${uuid()}.mp4`);
+  const safeText = escapeText(text);
+  const safeSubtitle = escapeText(subtitle);
 
-  // Escape special chars for FFmpeg drawtext
-  const safeText = (text || '').replace(/[':]/g, '\\$&');
-  const safeSubtitle = subtitle ? subtitle.replace(/[':]/g, '\\$&') : '';
+  // Color palette: darker for title, branded blue for CTA
+  const r1 = isCtaCard ? 29 : 15;
+  const g1 = isCtaCard ? 78 : 23;
+  const b1 = isCtaCard ? 216 : 42;
+  const r2 = isCtaCard ? 15 : 8;
+  const g2 = isCtaCard ? 40 : 12;
+  const b2 = isCtaCard ? 110 : 24;
 
-  // Build filter: two-tone gradient bg + text + fade
-  // Use a lighter shade overlaid with a gradient for depth
-  const filterParts = [
-    `drawtext=text='${safeText}':fontcolor=${textColor}:fontsize=60:x=(w-text_w)/2:y=(h-text_h)/2-30`,
-  ];
+  // Animated gradient background using geq with slow vertical shift
+  const bgFilter = `color=c=black:s=${width}x${height}:d=${duration}:r=30,` +
+    `geq=r='${r2}+(${r1}-${r2})*(H-Y+15*t)/H':g='${g2}+(${g1}-${g2})*(H-Y+15*t)/H':b='${b2}+(${b1}-${b2})*(H-Y+15*t)/H'`;
 
+  // Build filter parts
+  const filters = [bgFilter];
+
+  // Decorative soft accent shapes (semi-transparent boxes)
+  filters.push(`drawbox=x=${width - 400}:y=100:w=300:h=300:color=white@0.03:t=fill`);
+  filters.push(`drawbox=x=80:y=${height - 350}:w=250:h=250:color=white@0.02:t=fill`);
+
+  // Headline: slides up 25px while fading in over 0.6s
+  filters.push(
+    `drawtext=text='${safeText}':fontsize=68:fontcolor=white:` +
+    `x=(w-text_w)/2:` +
+    `y='(h/2-text_h-15+25*min(1\\,t/0.6))':` +
+    `alpha='min(1\\,t/0.6)'`
+  );
+
+  // Subtitle: delayed fade-in with slide up
   if (safeSubtitle) {
-    // Word-wrap long subtitles by limiting width
-    filterParts.push(
-      `drawtext=text='${safeSubtitle}':fontcolor=${textColor}@0.7:fontsize=26:x=(w-text_w)/2:y=(h-text_h)/2+50`
+    filters.push(
+      `drawtext=text='${safeSubtitle}':fontsize=28:fontcolor=white@0.75:` +
+      `x=(w-text_w)/2:` +
+      `y='(h/2+35+15*min(1\\,max(0\\,(t-0.3))/0.5))':` +
+      `alpha='if(gt(t\\,0.3)\\,min(1\\,(t-0.3)/0.5)\\,0)'`
     );
   }
 
-  // Fade in/out for smooth transitions
-  filterParts.push(`fade=t=in:st=0:d=0.6,fade=t=out:st=${Math.max(0, duration - 0.6)}:d=0.6`);
+  // Animated accent line that grows from center
+  filters.push(
+    `drawbox=x='w/2-150*min(1\\,t/0.8)':y='h/2+${safeSubtitle ? 80 : 40}':` +
+    `w='300*min(1\\,t/0.8)':h=3:` +
+    `color=${isCtaCard ? 'white' : '#4f7df5'}@0.7:t=fill`
+  );
 
-  // Create gradient background by blending two colors
-  const gradTop = bgColor;
-  const gradBottom = bgColor === '0x1d4ed8' ? '0x0f2a6e' : '0x0f1b3d';
+  // Fade out at end
+  filters.push(`fade=t=out:st=${Math.max(0, duration - 0.5)}:d=0.5`);
 
   await runFFmpeg([
     '-y',
     '-f', 'lavfi',
-    '-i', `color=c=${gradTop}:s=${width}x${height / 2}:d=${duration}:r=30`,
-    '-f', 'lavfi',
-    '-i', `color=c=${gradBottom}:s=${width}x${height / 2}:d=${duration}:r=30`,
-    '-filter_complex',
-    `[0][1]vstack,${filterParts.join(',')}`,
-    '-c:v', 'libx264',
-    '-t', String(duration),
-    '-pix_fmt', 'yuv420p',
-    outputPath,
-  ]);
-
-  return outputPath;
-}
-
-/**
- * Create a video clip from a screenshot with an effect and fade transitions.
- */
-async function createScreenshotClip(screenshotBuffer, effect, duration, options = {}) {
-  const { width = 1920, height = 1080 } = options;
-
-  const imgPath = join(TEMP_DIR, `img-${uuid()}.png`);
-  const outputPath = join(TEMP_DIR, `clip-${uuid()}.mp4`);
-
-  writeFileSync(imgPath, screenshotBuffer);
-
-  const effectType = effect?.type || 'fade';
-  let filter = getEffectFilter(effectType, duration, width, height);
-
-  // Add fade in/out for smooth scene transitions
-  filter += `,fade=t=in:st=0:d=0.5,fade=t=out:st=${Math.max(0, duration - 0.5)}:d=0.5`;
-
-  await runFFmpeg([
-    '-y',
-    '-loop', '1',
-    '-i', imgPath,
-    '-vf', filter,
+    '-i', filters[0], // background source
+    '-vf', filters.slice(1).join(','),
     '-c:v', 'libx264',
     '-t', String(duration),
     '-pix_fmt', 'yuv420p',
@@ -115,58 +113,128 @@ async function createScreenshotClip(screenshotBuffer, effect, duration, options 
     outputPath,
   ]);
 
-  try { unlinkSync(imgPath); } catch {}
-
   return outputPath;
 }
 
+// ─── Screenshot Clip ─────────────────────────────────────────────────
 /**
- * Generate ambient background music using layered sine waves (Am chord).
- * Creates a warm, professional-sounding pad with fade in/out.
+ * Creates a screenshot clip with:
+ * - Dark gradient background (screenshot floats on it)
+ * - Drop shadow effect
+ * - Motion effect (zoom, pan, ken burns, etc.)
+ * - Optional text overlay (lower-third style)
  */
-async function generateBackgroundMusic(duration) {
-  const outputPath = join(TEMP_DIR, `bgm-${uuid()}.mp3`);
-  const fadeOut = Math.max(0, duration - 3);
+async function createScreenshotClip(screenshotBuffer, effect, duration, options = {}) {
+  const { width = 1920, height = 1080, headline } = options;
 
-  // Layer 4 frequencies forming an Am chord for a warm ambient pad
-  // Each at different volumes for a rich, non-annoying sound
+  const imgPath = join(TEMP_DIR, `img-${uuid()}.png`);
+  const bgPath = join(TEMP_DIR, `bg-${uuid()}.mp4`);
+  const outputPath = join(TEMP_DIR, `clip-${uuid()}.mp4`);
+
+  writeFileSync(imgPath, screenshotBuffer);
+
+  // Step 1: Create dark gradient background video
   await runFFmpeg([
     '-y',
-    '-f', 'lavfi', '-i', `sine=frequency=174:duration=${duration}`,
-    '-f', 'lavfi', '-i', `sine=frequency=220:duration=${duration}`,
-    '-f', 'lavfi', '-i', `sine=frequency=261:duration=${duration}`,
-    '-f', 'lavfi', '-i', `sine=frequency=329:duration=${duration}`,
-    '-filter_complex',
-    `[0:a]volume=0.12[a];[1:a]volume=0.10[b];[2:a]volume=0.08[c];[3:a]volume=0.06[d];` +
-    `[a][b][c][d]amix=inputs=4:duration=longest,afade=t=in:st=0:d=2,afade=t=out:st=${fadeOut}:d=3[out]`,
-    '-map', '[out]',
-    '-c:a', 'libmp3lame',
-    '-b:a', '128k',
-    outputPath,
-  ]).catch(async () => {
-    // Fallback: single tone if complex filter fails
-    await runFFmpeg([
-      '-y',
-      '-f', 'lavfi',
-      '-i', `sine=frequency=220:duration=${duration}`,
-      '-af', `volume=0.15,afade=t=in:st=0:d=2,afade=t=out:st=${fadeOut}:d=3`,
-      '-c:a', 'libmp3lame',
-      '-b:a', '128k',
-      outputPath,
-    ]);
-  });
+    '-f', 'lavfi',
+    '-i', `color=c=black:s=${width}x${height}:d=${duration}:r=30,` +
+      `geq=r='8+4*Y/H':g='10+5*Y/H':b='16+10*Y/H'`,
+    '-c:v', 'libx264',
+    '-t', String(duration),
+    '-pix_fmt', 'yuv420p',
+    '-r', '30',
+    bgPath,
+  ]);
 
-  logger.info(`Composer: generated background music (${duration}s)`);
+  // Step 2: Create the screenshot clip with motion effect at 85% size
+  const ssWidth = Math.round(width * 0.88);
+  const ssHeight = Math.round(height * 0.85);
+  const effectType = effect?.type || 'zoom_in';
+  const motionFilter = getEffectFilter(effectType, duration, ssWidth, ssHeight);
+
+  const ssClipPath = join(TEMP_DIR, `ss-${uuid()}.mp4`);
+  await runFFmpeg([
+    '-y',
+    '-loop', '1',
+    '-i', imgPath,
+    '-vf', motionFilter,
+    '-c:v', 'libx264',
+    '-t', String(duration),
+    '-pix_fmt', 'yuv420p',
+    '-r', '30',
+    ssClipPath,
+  ]);
+
+  // Step 3: Create shadow layer (blurred, dark copy offset by 6px)
+  const shadowPath = join(TEMP_DIR, `shadow-${uuid()}.mp4`);
+  await runFFmpeg([
+    '-y',
+    '-i', ssClipPath,
+    '-vf', `boxblur=12:12,colorchannelmixer=aa=0.35`,
+    '-c:v', 'libx264',
+    '-pix_fmt', 'yuv420p',
+    shadowPath,
+  ]);
+
+  // Step 4: Composite: bg + shadow (offset) + screenshot + optional text overlay
+  const ox = Math.round((width - ssWidth) / 2);
+  const oy = Math.round((height - ssHeight) / 2);
+
+  let filterComplex = [
+    `[1:v]setpts=PTS-STARTPTS[shadow]`,
+    `[2:v]setpts=PTS-STARTPTS[ss]`,
+    `[0:v][shadow]overlay=${ox + 6}:${oy + 6}[with_shadow]`,
+    `[with_shadow][ss]overlay=${ox}:${oy}[composed]`,
+  ];
+
+  let lastLabel = 'composed';
+
+  // Add text overlay if headline provided
+  if (headline) {
+    const safeHeadline = escapeText(headline);
+    filterComplex.push(
+      `[${lastLabel}]` +
+      `drawbox=x=0:y=h-100:w=w:h=100:color=black@0.5:t=fill,` +
+      `drawtext=text='${safeHeadline}':fontsize=32:fontcolor=white:` +
+      `x=60:y=h-72:` +
+      `alpha='if(between(t\\,0.5\\,${duration - 0.5})\\,min(1\\,(t-0.5)/0.4)\\,max(0\\,1-(t-${duration - 0.5})/0.4))'` +
+      `[textout]`
+    );
+    lastLabel = 'textout';
+  }
+
+  await runFFmpeg([
+    '-y',
+    '-i', bgPath,
+    '-i', shadowPath,
+    '-i', ssClipPath,
+    '-filter_complex', filterComplex.join(';'),
+    '-map', `[${lastLabel}]`,
+    '-c:v', 'libx264',
+    '-pix_fmt', 'yuv420p',
+    '-r', '30',
+    '-t', String(duration),
+    outputPath,
+  ]);
+
+  // Cleanup intermediate files
+  for (const p of [imgPath, bgPath, ssClipPath, shadowPath]) {
+    try { unlinkSync(p); } catch {}
+  }
+
   return outputPath;
 }
 
+// ─── Compose Final Video ─────────────────────────────────────────────
 /**
  * Compose the final video from scene clips, voiceover, and subtitles.
+ * Uses xfade transitions between scenes for professional look.
  */
 async function composeVideo({ project, sceneJson, subtitles, screenshots, voiceover }) {
   const scenes = sceneJson.scenes || [];
   const settings = sceneJson.videoSettings || { width: 1920, height: 1080 };
   const clipPaths = [];
+  const clipDurations = [];
   const tempFiles = [];
 
   logger.info(`Composer: building ${scenes.length} scenes`);
@@ -174,18 +242,19 @@ async function composeVideo({ project, sceneJson, subtitles, screenshots, voiceo
   // Build each scene clip
   for (const scene of scenes) {
     let clipPath;
+    const dur = scene.durationSeconds || 5;
 
     if (scene.sceneType === 'title_card') {
       clipPath = await createTextCard(
         scene.headline || project.productName,
         scene.bodyText || project.shortDescription,
-        { duration: scene.durationSeconds, width: settings.width, height: settings.height }
+        { duration: dur, width: settings.width, height: settings.height, isCtaCard: false }
       );
     } else if (scene.sceneType === 'cta_card') {
       clipPath = await createTextCard(
         scene.headline || project.callToAction || 'Try it today',
         scene.bodyText || project.productUrl || '',
-        { duration: scene.durationSeconds, width: settings.width, height: settings.height, bgColor: '0x1d4ed8' }
+        { duration: dur, width: settings.width, height: settings.height, isCtaCard: true }
       );
     } else if (scene.sceneType === 'screenshot') {
       const ref = scene.assetReference || '';
@@ -197,65 +266,73 @@ async function composeVideo({ project, sceneJson, subtitles, screenshots, voiceo
         clipPath = await createScreenshotClip(
           screenshot.buffer,
           scene.effect,
-          scene.durationSeconds,
-          { width: settings.width, height: settings.height }
+          dur,
+          { width: settings.width, height: settings.height, headline: scene.headline }
         );
       } else {
         clipPath = await createTextCard(
           scene.headline || 'Product Feature',
           scene.voiceoverText || '',
-          { duration: scene.durationSeconds }
+          { duration: dur }
         );
       }
     } else {
       clipPath = await createTextCard(
         scene.headline || '',
         scene.bodyText || '',
-        { duration: scene.durationSeconds }
+        { duration: dur }
       );
     }
 
     clipPaths.push(clipPath);
+    clipDurations.push(dur);
   }
 
-  // Create concat file for FFmpeg
-  const concatPath = join(TEMP_DIR, `concat-${uuid()}.txt`);
-  const concatContent = clipPaths.map((p) => `file '${p}'`).join('\n');
-  writeFileSync(concatPath, concatContent);
-  tempFiles.push(concatPath);
+  // ─── Merge clips with xfade transitions ───────────────────────────
+  const transitions = [];
+  for (let i = 0; i < scenes.length - 1; i++) {
+    transitions.push(pickTransition(scenes[i], scenes[i + 1]));
+  }
 
-  // Merge all clips
   const mergedPath = join(TEMP_DIR, `merged-${uuid()}.mp4`);
-  await runFFmpeg([
-    '-y',
-    '-f', 'concat',
-    '-safe', '0',
-    '-i', concatPath,
-    '-c:v', 'libx264',
-    '-pix_fmt', 'yuv420p',
-    mergedPath,
-  ]);
+
+  if (clipPaths.length === 1) {
+    // Single clip, just copy
+    await runFFmpeg(['-y', '-i', clipPaths[0], '-c', 'copy', mergedPath]);
+  } else {
+    const { filterComplex, outputLabel } = buildTransitionChain(
+      clipPaths.length, clipDurations, transitions, 0.5
+    );
+
+    const inputArgs = clipPaths.flatMap((p) => ['-i', p]);
+    await runFFmpeg([
+      '-y',
+      ...inputArgs,
+      '-filter_complex', filterComplex,
+      '-map', outputLabel,
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-r', '30',
+      mergedPath,
+    ]);
+  }
+
   tempFiles.push(mergedPath);
 
-  // Calculate total video duration for background music
-  const totalDuration = scenes.reduce((sum, s) => sum + (s.durationSeconds || 5), 0);
-
-  // Determine if we have real voiceover audio (not a 0-byte placeholder)
+  // ─── Audio ─────────────────────────────────────────────────────────
+  const totalDuration = clipDurations.reduce((sum, d) => sum + d, 0);
   const hasVoiceover = voiceover && voiceover.length > 100;
 
   let finalPath = mergedPath;
 
   if (hasVoiceover) {
-    // Add voiceover audio
     const voiceoverPath = join(TEMP_DIR, `vo-${uuid()}.mp3`);
     writeFileSync(voiceoverPath, voiceover);
     tempFiles.push(voiceoverPath);
 
-    // Generate background music to mix with voiceover
-    const bgmPath = await generateBackgroundMusic(totalDuration);
+    const bgmPath = await generateBackgroundMusic(TEMP_DIR, totalDuration);
     tempFiles.push(bgmPath);
 
-    // Mix voiceover + background music, then merge with video
     const withAudioPath = join(TEMP_DIR, `final-${uuid()}.mp4`);
     await runFFmpeg([
       '-y',
@@ -263,7 +340,7 @@ async function composeVideo({ project, sceneJson, subtitles, screenshots, voiceo
       '-i', voiceoverPath,
       '-i', bgmPath,
       '-filter_complex',
-      `[1:a]volume=1.0[voice];[2:a]volume=0.3[bgm];[voice][bgm]amix=inputs=2:duration=longest[aout]`,
+      `[1:a]volume=1.0[voice];[2:a]volume=0.25[bgm];[voice][bgm]amix=inputs=2:duration=longest[aout]`,
       '-map', '0:v',
       '-map', '[aout]',
       '-c:v', 'copy',
@@ -276,9 +353,8 @@ async function composeVideo({ project, sceneJson, subtitles, screenshots, voiceo
     finalPath = withAudioPath;
     tempFiles.push(withAudioPath);
   } else {
-    // No voiceover — add just background music so video isn't silent
     logger.info('Composer: no voiceover available, adding background music only');
-    const bgmPath = await generateBackgroundMusic(totalDuration);
+    const bgmPath = await generateBackgroundMusic(TEMP_DIR, totalDuration);
     tempFiles.push(bgmPath);
 
     const withBgmPath = join(TEMP_DIR, `final-bgm-${uuid()}.mp4`);
@@ -297,7 +373,7 @@ async function composeVideo({ project, sceneJson, subtitles, screenshots, voiceo
     tempFiles.push(withBgmPath);
   }
 
-  // Add subtitles if available
+  // ─── Subtitles ─────────────────────────────────────────────────────
   if (subtitles?.srtContent) {
     const srtPath = join(TEMP_DIR, `subs-${uuid()}.srt`);
     writeFileSync(srtPath, subtitles.srtContent);
@@ -307,7 +383,7 @@ async function composeVideo({ project, sceneJson, subtitles, screenshots, voiceo
     await runFFmpeg([
       '-y',
       '-i', finalPath,
-      '-vf', `subtitles=${srtPath}:force_style='FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=2,Shadow=1'`,
+      '-vf', `subtitles=${srtPath}:force_style='FontSize=28,PrimaryColour=&H00FFFFFF,OutlineColour=&H80000000,BackColour=&H40000000,Outline=2,Shadow=0,BorderStyle=4,MarginV=50,Alignment=2'`,
       '-c:v', 'libx264',
       '-c:a', 'copy',
       '-pix_fmt', 'yuv420p',

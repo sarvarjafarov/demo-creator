@@ -67,9 +67,16 @@ export async function generateVideo(req, res, next) {
 
     // Chain: voice -> video (runs in background, not blocking the response)
     (async () => {
-      await jobQueue.enqueueAndWait(voiceJob);
-      // Whether voice succeeded or failed, proceed with video render
-      await jobQueue.enqueueAndWait(videoJob);
+      try {
+        await jobQueue.enqueueAndWait(voiceJob);
+      } catch {
+        // Voice failure is non-blocking — continue to video render
+      }
+      try {
+        await jobQueue.enqueueAndWait(videoJob);
+      } catch {
+        // Video error already handled inside handler
+      }
     })();
 
     res.status(202).json({

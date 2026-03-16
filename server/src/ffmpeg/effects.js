@@ -1,60 +1,98 @@
 /**
  * FFmpeg filter expressions for scene effects.
- * Each function returns a filter string for use in FFmpeg filter_complex.
+ * Each function returns a filter string for use in FFmpeg -vf.
+ *
+ * All effects first scale the image to fit the target frame (preserving aspect ratio
+ * with black padding), then apply motion. This prevents stretching/distortion.
  */
 
 /**
- * Generate a zoom-in effect filter.
- * Slowly zooms from 100% to 110% over the duration.
+ * Base scale filter that preserves aspect ratio and pads to target size.
+ */
+function fitScale(width, height) {
+  return `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
+}
+
+/**
+ * Zoom-in effect: slowly zooms from 100% to ~108% over the duration.
+ * Uses zoompan on a slightly upscaled image for smooth motion.
  */
 export function zoomIn(duration, width = 1920, height = 1080) {
-  return `scale=${width * 1.1}:${height * 1.1},` +
-    `zoompan=z='min(zoom+0.001,1.1)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${duration * 30}:s=${width}x${height}:fps=30`;
+  const frames = duration * 30;
+  // Scale up slightly so zoompan has room to zoom
+  const sw = Math.round(width * 1.15);
+  const sh = Math.round(height * 1.15);
+  return `scale=${sw}:${sh}:force_original_aspect_ratio=decrease,pad=${sw}:${sh}:(ow-iw)/2:(oh-ih)/2:black,` +
+    `zoompan=z='min(zoom+0.0008,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${width}x${height}:fps=30`;
 }
 
 /**
- * Generate a zoom-out effect filter.
- * Starts zoomed in at 110% and zooms out to 100%.
+ * Zoom-out effect: starts at ~108% zoom and slowly zooms out to 100%.
  */
 export function zoomOut(duration, width = 1920, height = 1080) {
-  return `scale=${width * 1.1}:${height * 1.1},` +
-    `zoompan=z='if(eq(on,1),1.1,max(zoom-0.001,1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${duration * 30}:s=${width}x${height}:fps=30`;
+  const frames = duration * 30;
+  const sw = Math.round(width * 1.15);
+  const sh = Math.round(height * 1.15);
+  return `scale=${sw}:${sh}:force_original_aspect_ratio=decrease,pad=${sw}:${sh}:(ow-iw)/2:(oh-ih)/2:black,` +
+    `zoompan=z='if(eq(on,1),1.08,max(zoom-0.0008,1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${width}x${height}:fps=30`;
 }
 
 /**
- * Generate a left-to-right pan effect.
+ * Left-to-right pan: gently pans across the image horizontally.
  */
 export function panLeft(duration, width = 1920, height = 1080) {
-  const scaledWidth = Math.round(width * 1.2);
-  return `scale=${scaledWidth}:${height},` +
-    `zoompan=z='1':x='(iw-ow)*on/${duration * 30}':y='0':d=${duration * 30}:s=${width}x${height}:fps=30`;
+  const frames = duration * 30;
+  const sw = Math.round(width * 1.15);
+  return `scale=${sw}:${height}:force_original_aspect_ratio=decrease,pad=${sw}:${height}:(ow-iw)/2:(oh-ih)/2:black,` +
+    `zoompan=z='1':x='(iw-ow)*on/${frames}':y='(ih-oh)/2':d=${frames}:s=${width}x${height}:fps=30`;
 }
 
 /**
- * Generate a right-to-left pan effect.
+ * Right-to-left pan: gently pans across the image in reverse.
  */
 export function panRight(duration, width = 1920, height = 1080) {
-  const scaledWidth = Math.round(width * 1.2);
-  return `scale=${scaledWidth}:${height},` +
-    `zoompan=z='1':x='(iw-ow)*(1-on/${duration * 30})':y='0':d=${duration * 30}:s=${width}x${height}:fps=30`;
+  const frames = duration * 30;
+  const sw = Math.round(width * 1.15);
+  return `scale=${sw}:${height}:force_original_aspect_ratio=decrease,pad=${sw}:${height}:(ow-iw)/2:(oh-ih)/2:black,` +
+    `zoompan=z='1':x='(iw-ow)*(1-on/${frames})':y='(ih-oh)/2':d=${frames}:s=${width}x${height}:fps=30`;
 }
 
 /**
- * Static display with fade in and fade out.
+ * Fade in and out with static display.
  */
 export function fadeInOut(duration, width = 1920, height = 1080) {
-  const fadeFrames = 15; // 0.5 sec at 30fps
-  return `scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
-    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black,` +
-    `fade=t=in:st=0:d=0.5,fade=t=out:st=${duration - 0.5}:d=0.5`;
+  return `${fitScale(width, height)},` +
+    `fade=t=in:st=0:d=0.5,fade=t=out:st=${Math.max(0, duration - 0.5)}:d=0.5`;
 }
 
 /**
- * Static display - scale and pad to fit.
+ * Static display - scale and pad to fit, no motion.
  */
 export function staticDisplay(duration, width = 1920, height = 1080) {
-  return `scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
-    `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
+  return fitScale(width, height);
+}
+
+/**
+ * Ken Burns effect: combined slow zoom + diagonal pan.
+ * The signature documentary/cinema effect.
+ */
+export function kenBurns(duration, width = 1920, height = 1080) {
+  const frames = duration * 30;
+  const sw = Math.round(width * 1.2);
+  const sh = Math.round(height * 1.2);
+  return `scale=${sw}:${sh}:force_original_aspect_ratio=decrease,pad=${sw}:${sh}:(ow-iw)/2:(oh-ih)/2:black,` +
+    `zoompan=z='min(zoom+0.0006,1.08)':x='(iw-iw/zoom)/2+on*0.15':y='(ih-ih/zoom)/2+on*0.1':d=${frames}:s=${width}x${height}:fps=30`;
+}
+
+/**
+ * Gentle floating motion: subtle up-and-down bob that feels alive.
+ */
+export function float(duration, width = 1920, height = 1080) {
+  const frames = duration * 30;
+  const sw = Math.round(width * 1.08);
+  const sh = Math.round(height * 1.08);
+  return `scale=${sw}:${sh}:force_original_aspect_ratio=decrease,pad=${sw}:${sh}:(ow-iw)/2:(oh-ih)/2:black,` +
+    `zoompan=z='1.03':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2+6*sin(on/${frames}*6.28)':d=${frames}:s=${width}x${height}:fps=30`;
 }
 
 /** Map effect name to function */
@@ -63,6 +101,8 @@ export const effectMap = {
   zoom_out: zoomOut,
   pan_left: panLeft,
   pan_right: panRight,
+  ken_burns: kenBurns,
+  float: float,
   fade: fadeInOut,
   fade_in: fadeInOut,
   static: staticDisplay,
@@ -72,6 +112,6 @@ export const effectMap = {
  * Get the filter string for a given effect type.
  */
 export function getEffectFilter(effectType, duration, width, height) {
-  const fn = effectMap[effectType] || staticDisplay;
+  const fn = effectMap[effectType] || fadeInOut;
   return fn(duration, width, height);
 }

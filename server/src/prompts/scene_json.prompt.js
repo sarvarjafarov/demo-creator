@@ -44,7 +44,7 @@ Return JSON with this exact structure:
       "visualDirection": "Description of what to show",
       "assetReference": "screenshot_1 or null for generated cards",
       "effect": {
-        "type": "zoom_in | zoom_out | pan_left | pan_right | fade | static",
+        "type": "zoom_in | zoom_out | pan_left | pan_right | ken_burns | float | fade | static",
         "intensity": 0.1
       },
       "transition": {
@@ -69,7 +69,12 @@ Rules:
 - Middle scenes use "screenshot" type
 - startTime and endTime must be continuous with no gaps
 - All times in seconds
-- Total of all scene durations must equal totalDurationSeconds`;
+- Total of all scene durations must equal totalDurationSeconds
+- Use a VARIETY of effects across scenes for visual interest: zoom_in, zoom_out, pan_left, pan_right, ken_burns, float
+- ken_burns is great for hero/overview screenshots (slow zoom + diagonal pan, cinematic feel)
+- float adds subtle motion that feels alive (gentle bobbing)
+- Alternate effects between consecutive scenes — never use the same effect twice in a row
+- Each screenshot scene MUST have a headline text overlay describing the feature shown`;
 
   return { system, user };
 }

@@ -14,10 +14,15 @@ import logger from '../utils/logger.js';
  * Each step builds on the output of the previous step.
  */
 const novaService = {
-  /** Step 1: Generate product brief */
-  async generateBrief(project) {
-    logger.info(`Nova: generating brief for project ${project.id}`);
-    const { system, user } = buildProductBriefPrompt(project);
+  /** Step 1: Generate product brief (supports multimodal with screenshots) */
+  async generateBrief(project, screenshotBuffers = []) {
+    logger.info(`Nova: generating brief for project ${project.id} (screenshots: ${screenshotBuffers.length})`);
+    const hasScreenshots = screenshotBuffers.length > 0;
+    const { system, user } = buildProductBriefPrompt(project, { hasScreenshots });
+
+    if (hasScreenshots) {
+      return bedrockProvider.invokeJsonWithImages(user, system, screenshotBuffers, { maxTokens: 4096 });
+    }
     return bedrockProvider.invokeJson(user, system);
   },
 
