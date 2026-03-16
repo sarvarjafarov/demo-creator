@@ -1,44 +1,41 @@
-/**
- * Horizontal step indicator for the wizard flow.
- * Shows which step the user is on.
- *
- * @param {Array} steps - Array of step labels
- * @param {number} current - Zero-based index of the current step
- */
 export default function StepIndicator({ steps, current }) {
   return (
-    <div className="flex items-center justify-center gap-2 mb-10">
-      {steps.map((label, i) => (
-        <div key={i} className="flex items-center gap-2">
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                i < current
-                  ? 'bg-green-500 text-white'
-                  : i === current
-                  ? 'bg-brand-600 text-white'
-                  : 'bg-gray-200 text-gray-500'
-              }`}
-            >
-              {i < current ? '\u2713' : i + 1}
+    <div className="flex items-center justify-center mb-12">
+      {steps.map((label, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <div key={i} className="flex items-center">
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+                  done
+                    ? 'bg-green-500 text-white shadow-sm'
+                    : active
+                    ? 'bg-brand-600 text-white shadow-glow ring-4 ring-brand-100'
+                    : 'bg-gray-100 text-gray-400 border border-gray-200'
+                }`}
+              >
+                {done ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                ) : i + 1}
+              </div>
+              <span
+                className={`text-sm font-medium hidden sm:inline transition-colors ${
+                  done ? 'text-green-600' : active ? 'text-brand-700' : 'text-gray-400'
+                }`}
+              >
+                {label}
+              </span>
             </div>
-            <span
-              className={`text-sm font-medium hidden sm:inline ${
-                i <= current ? 'text-gray-900' : 'text-gray-400'
-              }`}
-            >
-              {label}
-            </span>
+            {i < steps.length - 1 && (
+              <div className={`w-10 h-0.5 mx-3 rounded-full transition-colors ${done ? 'bg-green-400' : 'bg-gray-200'}`} />
+            )}
           </div>
-          {i < steps.length - 1 && (
-            <div
-              className={`w-8 h-0.5 ${
-                i < current ? 'bg-green-500' : 'bg-gray-200'
-              }`}
-            />
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

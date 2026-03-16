@@ -5,3 +5,30 @@
 body {
   font-family: 'Inter', system-ui, sans-serif;
 }
+
+@layer utilities {
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-500 to-violet-500;
+  }
+  .card {
+    @apply bg-white rounded-2xl border border-gray-100 shadow-sm;
+  }
+  .card-hover {
+    @apply hover:shadow-md hover:border-brand-200 transition-all duration-300;
+  }
+  .btn-primary {
+    @apply px-8 py-3 bg-gradient-to-r from-brand-600 to-brand-500 text-white font-semibold rounded-xl hover:from-brand-700 hover:to-brand-600 transition-all duration-200 shadow-sm hover:shadow-md;
+  }
+  .btn-secondary {
+    @apply px-8 py-3 border border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}

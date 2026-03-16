@@ -27,16 +27,22 @@ export default function ResultPage() {
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-16 text-center">
-        <p className="text-gray-500">Loading result...</p>
+      <div className="max-w-3xl mx-auto px-6 py-20 text-center">
+        <div className="inline-flex items-center gap-3 text-gray-500">
+          <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          Loading result...
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-16">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+      <div className="max-w-3xl mx-auto px-6 py-16">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-5 py-4 rounded-xl text-sm">
           {error}
         </div>
       </div>
@@ -44,11 +50,16 @@ export default function ResultPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12">
+    <div className="max-w-4xl mx-auto px-6 py-12">
       <StepIndicator steps={WIZARD_STEPS} current={4} />
 
       <div className="text-center mb-10">
-        <h1 className="text-3xl font-bold mb-2">Your Demo Video is Ready</h1>
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-green-50 mb-5">
+          <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h1 className="text-3xl font-bold mb-2 text-gray-900">Your Demo Video is Ready</h1>
         <p className="text-gray-500">
           {result?.productName} &mdash; Generated with Amazon Nova
         </p>
@@ -56,17 +67,18 @@ export default function ResultPage() {
 
       {/* Video Preview */}
       {result?.video?.url ? (
-        <div className="bg-black rounded-xl overflow-hidden mb-8 shadow-lg">
+        <div className="relative rounded-2xl overflow-hidden mb-8 shadow-xl bg-gray-900">
+          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none z-10 rounded-2xl" />
           <video
             controls
-            className="w-full"
+            className="w-full relative z-0"
             src={result.video.url}
           >
             Your browser does not support the video tag.
           </video>
         </div>
       ) : (
-        <div className="bg-gray-100 rounded-xl p-16 text-center mb-8">
+        <div className="card p-16 text-center mb-8">
           <p className="text-gray-500">
             {result?.status === 'completed'
               ? 'Video will appear here once the signed URL is refreshed.'
@@ -76,37 +88,36 @@ export default function ResultPage() {
       )}
 
       {/* Actions */}
-      <div className="flex justify-center gap-4 mb-12">
+      <div className="flex justify-center gap-4 mb-14">
         {result?.video?.url && (
-          <a
-            href={result.video.url}
-            download
-            className="px-8 py-3 bg-brand-600 text-white font-semibold rounded-lg hover:bg-brand-700 transition-colors"
-          >
+          <a href={result.video.url} download className="btn-primary flex items-center gap-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
             Download MP4
           </a>
         )}
-        <Link
-          to="/"
-          className="px-8 py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
-        >
+        <Link to="/" className="btn-secondary flex items-center gap-2">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
           Create Another
         </Link>
       </div>
 
       {/* Generated Content Summary */}
       {result?.content && (
-        <div className="space-y-6">
-          <h2 className="text-xl font-bold">Generated Content</h2>
+        <div className="space-y-5">
+          <h2 className="text-xl font-bold text-gray-900">Generated Content</h2>
 
           {result.content.brief && (
-            <ContentCard title="Product Brief">
-              <p>{result.content.brief.productSummary}</p>
+            <ContentCard title="Product Brief" icon={<BriefIcon />}>
+              <p className="text-gray-600">{result.content.brief.productSummary}</p>
               {result.content.brief.keyMessages && (
-                <ul className="mt-3 space-y-1">
+                <ul className="mt-4 space-y-2">
                   {result.content.brief.keyMessages.map((m, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                      <span className="text-brand-500 mt-0.5">&#8226;</span>
+                    <li key={i} className="flex items-start gap-2.5 text-sm text-gray-600">
+                      <span className="w-5 h-5 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">{i + 1}</span>
                       {m}
                     </li>
                   ))}
@@ -116,7 +127,7 @@ export default function ResultPage() {
           )}
 
           {result.content.script && (
-            <ContentCard title="Demo Script">
+            <ContentCard title="Demo Script" icon={<ScriptIcon />}>
               <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">
                 {result.content.script.fullScript}
               </p>
@@ -124,7 +135,7 @@ export default function ResultPage() {
           )}
 
           {result.content.narration && (
-            <ContentCard title="Narration">
+            <ContentCard title="Narration" icon={<MicIcon />}>
               <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">
                 {result.content.narration.fullNarration}
               </p>
@@ -133,8 +144,8 @@ export default function ResultPage() {
         </div>
       )}
 
-      {/* Nova Attribution */}
-      <div className="mt-12 py-6 text-center border-t border-gray-200">
+      {/* Attribution */}
+      <div className="mt-14 py-6 text-center border-t border-gray-100">
         <p className="text-xs text-gray-400">
           Content generated by Amazon Nova via Amazon Bedrock.
           Voice generated by ElevenLabs. Video assembled with FFmpeg.
@@ -144,11 +155,26 @@ export default function ResultPage() {
   );
 }
 
-function ContentCard({ title, children }) {
+function ContentCard({ title, icon, children }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <h3 className="font-semibold mb-3">{title}</h3>
+    <div className="card p-6">
+      <div className="flex items-center gap-2.5 mb-4">
+        <span className="text-brand-500">{icon}</span>
+        <h3 className="font-semibold text-gray-900">{title}</h3>
+      </div>
       {children}
     </div>
   );
+}
+
+function BriefIcon() {
+  return <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>;
+}
+
+function ScriptIcon() {
+  return <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" /></svg>;
+}
+
+function MicIcon() {
+  return <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" /></svg>;
 }
